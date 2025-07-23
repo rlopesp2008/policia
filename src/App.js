@@ -3,7 +3,7 @@ import './App.css';
 import logo from './logo.svg';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-
+// nigga tron
 function MenuLateral() {
   return (
     <div className="menu-lateral">
