@@ -50,7 +50,7 @@ function DenunciaCard({ denuncia, onAceitar }) {
     </div>
   );
 }
-
+// help
 function DenunciaDetalhe({ denuncias, onAceitar }) {
   const { id } = useParams();
   const denuncia = denuncias.find(d => d.id === Number(id));
