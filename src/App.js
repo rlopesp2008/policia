@@ -1,354 +1,1143 @@
 import { BrowserRouter as Router, Routes, Route, Link, NavLink } from 'react-router-dom';
 import './App.css';
-import logo from './logo.svg';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-// nigga tron
+import { RECAPTCHA_SITE_KEY } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// Components
+import ErrorBoundary from './ErrorBoundary';
+import ErrorMessage, { ErrorToast, SuccessToast } from './components/ErrorMessage';
+import UserManagement from './components/UserManagement';
+
+// Hooks
+import { useAuth } from './hooks/useAuth';
+import { useOcorrencias } from './hooks/useOcorrencias';
+import { usePatrulhas } from './hooks/usePatrulhas';
+import { useEstatisticas } from './hooks/useEstatisticas';
+
+// Logout button component
+function LogoutButton() {
+  const { signOut, user } = useAuth();
+
+  const handleLogout = async () => {
+    if (window.confirm('Tem a certeza que pretende sair do sistema?')) {
+      try {
+        await signOut();
+        console.log('Logout realizado com sucesso');
+      } catch (error) {
+        console.error('Erro ao fazer logout:', error);
+        alert('Erro ao sair do sistema');
+      }
+    }
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="logout-section">
+      <div className="user-info">
+        <div className="user-avatar">
+          {user.photoURL ? (
+            <img src={user.photoURL} alt={user.displayName} />
+          ) : (
+            <div className="avatar-placeholder">👮</div>
+          )}
+        </div>
+        <div className="user-details">
+          <p className="user-name">{user.displayName}</p>
+          <p className="user-role">{user.cargo || 'Agente'}</p>
+        </div>
+      </div>
+      <button 
+        onClick={handleLogout}
+        className="logout-btn"
+        title="Sair do sistema"
+      >
+        🚪 Sair
+      </button>
+    </div>
+  );
+}
+
+// Services (permissions temporarily disabled)
+
 function MenuLateral() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
-    <div className="menu-lateral">
-      <NavLink to="/" className="logo-link">
-        <img src="/logo_pap_MR.png" alt="Logo" className="logo" />
-      </NavLink>
-      <nav>
-        <ul>
-          <li><NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>Principal</NavLink></li>
-          <li><NavLink to="/perfil" className={({ isActive }) => isActive ? 'active' : ''}>Perfil</NavLink></li>
-          <li><NavLink to="/denuncias" className={({ isActive }) => isActive ? 'active' : ''}>Denúncias</NavLink></li>
-          <li><NavLink to="/historico" className={({ isActive }) => isActive ? 'active' : ''}>Histórico</NavLink></li>
-          <li><NavLink to="/definicoes" className={({ isActive }) => isActive ? 'active' : ''}>Definições</NavLink></li>
-        </ul>
-      </nav>
-    </div>
+    <>
+      {/* Mobile menu toggle button */}
+      <button className="menu-toggle" onClick={toggleMobileMenu}>
+        ☰
+      </button>
+
+      {/* Mobile menu overlay */}
+      <div 
+        className={`menu-overlay ${isMobileMenuOpen ? 'active' : ''}`} 
+        onClick={closeMobileMenu}
+      ></div>
+
+      {/* Sidebar menu */}
+      <div className={`menu-lateral ${isMobileMenuOpen ? 'menu-open' : ''}`}>
+        <div className="logo-container">
+          <img src="/logo_pap_MR.png" alt="Logo PSP" className="logo" />
+          <h3 className="logo-text">🇵🇹 Polícia Alerta</h3>
+        </div>
+        <nav className="nav-menu">
+          <ul>
+            <li><NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>📊 Dashboard</NavLink></li>
+            <li><NavLink to="/ocorrencias" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>📱 Relatórios</NavLink></li>
+            <li><NavLink to="/patrulhas" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>🚔 Patrulhas PSP</NavLink></li>
+            <li><NavLink to="/relatorios" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>📋 Estatísticas</NavLink></li>
+            <li><NavLink to="/usuarios" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>👥 Usuários</NavLink></li>
+            <li><NavLink to="/perfil" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>👤 Perfil</NavLink></li>
+            <li><NavLink to="/configuracoes" className={({ isActive }) => isActive ? 'active' : ''} onClick={closeMobileMenu}>⚙️ Configurações</NavLink></li>
+          </ul>
+        </nav>
+        <div className="menu-footer">
+          <LogoutButton />
+        </div>
+      </div>
+    </>
   );
 }
 
-function Denuncias({ denuncias, onAceitar }) {
+function Dashboard() {
+  const { estatisticas, loading, error, refreshEstatisticas } = useEstatisticas();
+
   return (
-    <div className="pagina">
-      <h2>Denúncias Recentes</h2>
-      <div className="denuncias-lista">
-        {denuncias.map(d => (
-          <DenunciaCard key={d.id} denuncia={d} onAceitar={onAceitar} />
-        ))}
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <h1>🚨 Polícia Alerta - Dashboard</h1>
+        <div className="status-indicator">
+          <span className="status-dot online"></span>
+          Sistema Operacional
+        </div>
+        <button 
+          className="refresh-btn" 
+          onClick={refreshEstatisticas}
+          title="Atualizar estatísticas"
+        >
+          🔄
+        </button>
+      </div>
+      
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">📱</div>
+          <div className="stat-content">
+            <h3>{estatisticas.ocorrenciasAtivas}</h3>
+            <p>Relatórios Ativos</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🚔</div>
+          <div className="stat-content">
+            <h3>{estatisticas.patrulhas}</h3>
+            <p>Patrulhas PSP</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <h3>{estatisticas.resolvidas}</h3>
+            <p>Resolvidos Hoje</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">⚡</div>
+          <div className="stat-content">
+            <h3>{estatisticas.tempoMedio}min</h3>
+            <p>Tempo Médio</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-sections">
+        <div className="section-card">
+          <h2>📢 Relatórios de Cidadãos</h2>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '1rem' }}>
+            Últimos relatórios enviados via aplicação móvel
+          </p>
+          <div className="ocorrencias-lista">
+            {estatisticas.ocorrenciasRecentes.length > 0 ? (
+              estatisticas.ocorrenciasRecentes.map(oc => (
+                <div key={oc.id} className="ocorrencia-item">
+                  <div className="ocorrencia-prioridade alta"></div>
+                  <div className="ocorrencia-info">
+                    <h4>🎯 {oc.tipo}</h4>
+                    <p>📍 {oc.localizacao}</p>
+                    <span className="ocorrencia-tempo">⏰ há {oc.tempo}</span>
+                  </div>
+                  <div className="ocorrencia-status">{oc.status}</div>
+                </div>
+              ))
+            ) : (
+              <p className="no-data">Nenhum relatório recente</p>
+            )}
+          </div>
+        </div>
+
+        <div className="section-card">
+          <h2>🔄 Atividade do Sistema</h2>
+          <div className="atividade-lista">
+            <div className="atividade-item">
+              <span className="atividade-tempo">{new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="atividade-texto">Sistema Polícia Alerta operacional</span>
+            </div>
+            <div className="atividade-item">
+              <span className="atividade-tempo">{new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="atividade-texto">A aguardar relatórios de cidadãos - {estatisticas.ocorrenciasAtivas} ativos</span>
+            </div>
+            <div className="atividade-item">
+              <span className="atividade-tempo">{new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="atividade-texto">🚔 {estatisticas.patrulhas} patrulhas PSP em serviço</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function DenunciaCard({ denuncia, onAceitar }) {
+function Ocorrencias() {
+  const { 
+    ocorrencias, 
+    loading, 
+    error, 
+    atenderOcorrencia, 
+    getOcorrenciasByStatus, 
+    getOcorrenciasByPrioridade 
+  } = useOcorrencias();
+  const [filtroStatus, setFiltroStatus] = React.useState('Todos');
+  const [filtroPrioridade, setFiltroPrioridade] = React.useState('Todas');
+  const [notification, setNotification] = React.useState(null);
+
+  const handleAtender = async (id) => {
+    try {
+      await atenderOcorrencia(id);
+      setNotification({ type: 'success', message: 'Ocorrência atendida com sucesso!' });
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Erro ao atender ocorrência' });
+    }
+  };
+
+  const ocorrenciasFiltradas = React.useMemo(() => {
+    let filtered = ocorrencias;
+    
+    if (filtroStatus !== 'Todos') {
+      filtered = getOcorrenciasByStatus(filtroStatus);
+    }
+    
+    if (filtroPrioridade !== 'Todas') {
+      filtered = filtered.filter(oc => oc.prioridade === filtroPrioridade);
+    }
+    
+    return filtered;
+  }, [ocorrencias, filtroStatus, filtroPrioridade, getOcorrenciasByStatus]);
+
+  return (
+    <div className="ocorrencias-page">
+      {notification && notification.type === 'success' && (
+        <SuccessToast 
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      {notification && notification.type === 'error' && (
+        <ErrorToast 
+          error={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      
+      <div className="page-header">
+        <h1>📱 Relatórios de Crimes</h1>
+        <p style={{ fontSize: '14px', color: '#666', margin: '0.5rem 0' }}>
+          Relatórios enviados por cidadãos através da aplicação móvel
+        </p>
+        <div className="filtros">
+          <select 
+            className="filtro-select"
+            value={filtroPrioridade}
+            onChange={(e) => setFiltroPrioridade(e.target.value)}
+          >
+            <option value="Todas">📊 Todas as Prioridades</option>
+            <option value="Alta">🔴 Alta</option>
+            <option value="Média">🟡 Média</option>
+            <option value="Baixa">🟢 Baixa</option>
+          </select>
+          <select 
+            className="filtro-select"
+            value={filtroStatus}
+            onChange={(e) => setFiltroStatus(e.target.value)}
+          >
+            <option value="Todos">📋 Todos os Status</option>
+            <option value="Pendente">⏳ Pendente</option>
+            <option value="Em Andamento">🔄 Em Andamento</option>
+            <option value="Resolvida">✅ Resolvida</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="ocorrencias-grid">
+        {ocorrenciasFiltradas.length > 0 ? (
+          ocorrenciasFiltradas.map(oc => (
+            <OcorrenciaCard key={oc.id} ocorrencia={oc} onAtender={handleAtender} />
+          ))
+        ) : (
+          <div className="no-data-message">
+            <p>Nenhuma ocorrência encontrada com os filtros selecionados.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OcorrenciaCard({ ocorrencia, onAtender }) {
   const navigate = useNavigate();
+  
+  const getPrioridadeClass = (prioridade) => {
+    switch(prioridade) {
+      case 'Alta': return 'prioridade-alta';
+      case 'Média': return 'prioridade-media';
+      case 'Baixa': return 'prioridade-baixa';
+      default: return '';
+    }
+  };
+
+  const formatTime = (timestamp) => {
+    const time = new Date(timestamp);
+    return time.toLocaleTimeString('pt-PT', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
   return (
-    <div className="denuncia-card" style={{ cursor: 'pointer' }}>
-      <img src={denuncia.foto} alt={denuncia.titulo} className="denuncia-foto" onClick={() => navigate(`/denuncias/${denuncia.id}`)} />
-      <div onClick={() => navigate(`/denuncias/${denuncia.id}`)}>
-        <h3>{denuncia.titulo}</h3>
-        <p>{denuncia.descricao}</p>
-        <p><b>Localização:</b> {denuncia.localizacao}</p>
+    <div className="ocorrencia-card" onClick={() => navigate(`/ocorrencias/${ocorrencia.id}`)}>
+      <div className="ocorrencia-header">
+        <span className={`prioridade-badge ${getPrioridadeClass(ocorrencia.prioridade)}`}>
+          {ocorrencia.urgencia === 'Imediata' ? '🚨' : ocorrencia.urgencia === 'Alta' ? '🔴' : ocorrencia.urgencia === 'Moderada' ? '🟡' : '🟢'} 
+          {ocorrencia.prioridade}
+        </span>
+        <span className="ocorrencia-id">#{ocorrencia.id}</span>
       </div>
-      <button className="aceitar-btn" onClick={e => { e.stopPropagation(); onAceitar(denuncia.id); }}>Aceitar denúncia</button>
-    </div>
-  );
-}
-// help
-function DenunciaDetalhe({ denuncias, onAceitar }) {
-  const { id } = useParams();
-  const denuncia = denuncias.find(d => d.id === Number(id));
-  if (!denuncia) return <div className="pagina"><h2>Denúncia não encontrada</h2></div>;
-  const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(denuncia.localizacao)}&output=embed`;
-  return (
-    <div className="pagina denuncia-detalhe">
-      <h2>{denuncia.titulo}</h2>
-      <img src={denuncia.foto} alt={denuncia.titulo} className="denuncia-foto-detalhe" />
-      <p><b>Descrição:</b> {denuncia.descricao}</p>
-      <p><b>Detalhes:</b> {denuncia.detalhes}</p>
-      <p><b>Localização:</b> {denuncia.localizacao}</p>
-      <div className="mapa-wrapper">
-        <iframe
-          title="Mapa da denúncia"
-          src={mapsUrl}
-          width="100%"
-          height="300"
-          style={{ border: 0, borderRadius: '10px', marginTop: '16px' }}
-          allowFullScreen=""
-          loading="lazy"
-        ></iframe>
+      
+      <div className="ocorrencia-content">
+        <h3>🎯 {ocorrencia.tipo}</h3>
+        <p className="ocorrencia-descricao">{ocorrencia.descricao}</p>
+        
+        <div className="ocorrencia-detalhes">
+          <div className="detalhe-item">
+            <strong>📍 Local:</strong> {ocorrencia.localizacao}
+          </div>
+          <div className="detalhe-item">
+            <strong>⏰ Reportado:</strong> {formatTime(ocorrencia.registradaEm)}
+          </div>
+          <div className="detalhe-item">
+            <strong>👤 Cidadão:</strong> {ocorrencia.cidadaoNome}
+          </div>
+          {ocorrencia.imagens && ocorrencia.imagens.length > 0 && (
+            <div className="detalhe-item">
+              <strong>📷 Imagens:</strong> {ocorrencia.imagens.length} foto{ocorrencia.imagens.length > 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
       </div>
-      <button className="aceitar-btn" onClick={() => onAceitar(denuncia.id)} style={{marginTop: 24}}>Aceitar denúncia</button>
+
+      <div className="ocorrencia-footer">
+        <span className={`status-badge status-${ocorrencia.status.toLowerCase().replace(' ', '-')}`}>
+          {ocorrencia.status === 'Pendente' ? '⏳' : ocorrencia.status === 'Em Andamento' ? '🔄' : '✅'} {ocorrencia.status}
+        </span>
+        <button 
+          className="atender-btn" 
+          onClick={(e) => { e.stopPropagation(); onAtender(ocorrencia.id); }}
+        >
+          {ocorrencia.status === 'Pendente' ? '🔄 Atender' : ocorrencia.status === 'Em Andamento' ? '✅ Resolver' : '👁️ Ver'}
+        </button>
+      </div>
     </div>
   );
 }
 
-function Historico({ historico }) {
+function OcorrenciaDetalhe() {
+  const { id } = useParams();
+  const { getOcorrenciaById, atenderOcorrencia, resolverOcorrencia } = useOcorrencias();
+  const [notification, setNotification] = React.useState(null);
+  
+  const ocorrencia = getOcorrenciaById(id);
+
+  const handleAtender = async () => {
+    try {
+      await atenderOcorrencia(id);
+      setNotification({ type: 'success', message: 'Ocorrência atendida com sucesso!' });
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Erro ao atender ocorrência' });
+    }
+  };
+
+  const handleResolver = async () => {
+    try {
+      await resolverOcorrencia(id);
+      setNotification({ type: 'success', message: 'Ocorrência resolvida com sucesso!' });
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Erro ao resolver ocorrência' });
+    }
+  };
+  
+  if (!ocorrencia) return <div className="error-page"><h2>Ocorrência não encontrada</h2></div>;
+
   return (
-    <div className="pagina">
-      <h2>Histórico de Denúncias</h2>
-      {historico.length === 0 ? <p>Sem denúncias aceites.</p> : (
-        <div className="denuncias-lista">
-          {historico.map(d => (
-            <div key={d.id} className="denuncia-card">
-              <img src={d.foto} alt={d.titulo} className="denuncia-foto" />
-              <div>
-                <h3>{d.titulo}</h3>
-                <p>{d.descricao}</p>
-                <p><b>Localização:</b> {d.localizacao}</p>
-                <p className="aceite-info">Aceite há {Math.floor((Date.now() - d.aceiteEm) / 60000)} minutos</p>
+    <div className="ocorrencia-detalhe-page">
+      {notification && notification.type === 'success' && (
+        <SuccessToast 
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      {notification && notification.type === 'error' && (
+        <ErrorToast 
+          error={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      
+      <div className="page-header">
+        <button className="voltar-btn" onClick={() => window.history.back()}>← Voltar</button>
+        <h1>Ocorrência #{ocorrencia.id}</h1>
+      </div>
+
+      <div className="detalhe-content">
+        <div className="detalhe-principal">
+          <div className="detalhe-header">
+            <h2>{ocorrencia.tipo}</h2>
+            <span className={`prioridade-badge ${ocorrencia.prioridade?.toLowerCase()}`}>
+              {ocorrencia.prioridade}
+            </span>
+          </div>
+          
+          <div className="detalhe-info">
+            <div className="info-item">
+              <label>Descrição:</label>
+              <p>{ocorrencia.descricao}</p>
+            </div>
+            <div className="info-item">
+              <label>Localização:</label>
+              <p>{ocorrencia.localizacao}</p>
+            </div>
+            <div className="info-item">
+              <label>Registrada em:</label>
+              <p>{ocorrencia.registradaEm}</p>
+            </div>
+            <div className="info-item">
+              <label>Status:</label>
+              <span className={`status-badge status-${ocorrencia.status?.toLowerCase()}`}>
+                {ocorrencia.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="detalhe-acoes">
+            {ocorrencia.status === 'Pendente' && (
+              <button className="atender-btn" onClick={handleAtender}>
+                Atender Ocorrência
+              </button>
+            )}
+            {ocorrencia.status === 'Em Andamento' && (
+              <button className="resolver-btn" onClick={handleResolver}>
+                Resolver Ocorrência
+              </button>
+            )}
+            <button className="secundario-btn">
+              Atribuir Patrulha
+            </button>
+          </div>
+        </div>
+
+        <div className="detalhe-mapa">
+          <h3>Localização</h3>
+          <div className="mapa-container">
+            <iframe
+              title="Mapa da ocorrência"
+              src={`https://www.google.com/maps?q=${encodeURIComponent(ocorrencia.localizacao)}&output=embed`}
+              width="100%"
+              height="300"
+              style={{ border: 0, borderRadius: '8px' }}
+              allowFullScreen=""
+              loading="lazy"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Patrulhas() {
+  const { patrulhas, loading, error, updatePatrulhaStatus } = usePatrulhas();
+  const [notification, setNotification] = React.useState(null);
+
+  const handleStatusChange = async (id, novoStatus) => {
+    try {
+      await updatePatrulhaStatus(id, novoStatus);
+      setNotification({ 
+        type: 'success', 
+        message: `Status da patrulha atualizado para: ${novoStatus}` 
+      });
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Erro ao atualizar status da patrulha' });
+    }
+  };
+
+  return (
+    <div className="patrulhas-page">
+      {notification && notification.type === 'success' && (
+        <SuccessToast 
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      {notification && notification.type === 'error' && (
+        <ErrorToast 
+          error={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      
+      <div className="page-header">
+        <h1>Gestão de Patrulhas</h1>
+        <button className="nova-patrulha-btn">Nova Patrulha</button>
+      </div>
+
+      <div className="patrulhas-grid">
+        {patrulhas.length > 0 ? (
+          patrulhas.map(patrulha => (
+            <div key={patrulha.id} className="patrulha-card">
+              <div className="patrulha-header">
+                <h3>{patrulha.codigo}</h3>
+                <select
+                  className={`status-select status-${patrulha.status?.toLowerCase()}`}
+                  value={patrulha.status}
+                  onChange={(e) => handleStatusChange(patrulha.id, e.target.value)}
+                >
+                  <option value="Ativa">Ativa</option>
+                  <option value="Inativa">Inativa</option>
+                  <option value="Em Patrulha">Em Patrulha</option>
+                  <option value="Em Emergência">Em Emergência</option>
+                </select>
+              </div>
+              <div className="patrulha-info">
+                <p><strong>Agentes:</strong> {patrulha.agentes?.join(', ') || 'Não definido'}</p>
+                <p><strong>Viatura:</strong> {patrulha.viatura || 'Não definida'}</p>
+                <p><strong>Zona:</strong> {patrulha.zona || 'Não definida'}</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <div className="no-data-message">
+            <p>Nenhuma patrulha cadastrada no sistema.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-// muda o tema
-const temas = [
-  { nome: 'Vermelho e Azul', id: 'vermelhoazul', vars: { '--cor-primaria': '#e74c3c', '--cor-secundaria': '#2980b9', '--cor-fundo': '#f4f6fa', '--cor-texto': '#222', '--cor-borda': '#e0e0e0', '--cor-sombra': '0 2px 8px rgba(0,0,0,0.07)' } },
-  { nome: 'Escuro', id: 'escuro', vars: { '--cor-primaria': '#222', '--cor-secundaria': '#444', '--cor-fundo': '#181a1b', '--cor-texto': '#f4f6fa', '--cor-borda': '#444', '--cor-sombra': '0 2px 8px rgba(0,0,0,0.45)' } },
-  { nome: 'Claro', id: 'claro', vars: { '--cor-primaria': '#1a2236', '--cor-secundaria': '#61dafb', '--cor-fundo': '#fff', '--cor-texto': '#222', '--cor-borda': '#e0e0e0', '--cor-sombra': '0 2px 8px rgba(0,0,0,0.07)' } },
-  { nome: 'Amarelo e Preto', id: 'amarelopreto', vars: { '--cor-primaria': '#f1c40f', '--cor-secundaria': '#222', '--cor-fundo': '#fffbe6', '--cor-texto': '#222', '--cor-borda': '#e0e0e0', '--cor-sombra': '0 2px 8px rgba(0,0,0,0.07)' } },
-  
-];
 
-function aplicarTema(vars) {
-  Object.entries(vars).forEach(([k, v]) => {
-    document.documentElement.style.setProperty(k, v);
-  });
+function Relatorios() {
+  return (
+    <div className="relatorios-page">
+      <div className="page-header">
+        <h1>Relatórios e Estatísticas</h1>
+      </div>
+      
+      <div className="relatorios-grid">
+        <div className="relatorio-card">
+          <h3>Ocorrências por Tipo</h3>
+          <div className="relatorio-content">
+            <p>Relatório mensal de ocorrências categorizadas</p>
+            <button className="gerar-btn">Gerar Relatório</button>
+          </div>
+        </div>
+        
+        <div className="relatorio-card">
+          <h3>Tempo de Resposta</h3>
+          <div className="relatorio-content">
+            <p>Análise de eficiência operacional</p>
+            <button className="gerar-btn">Gerar Relatório</button>
+          </div>
+        </div>
+        
+        <div className="relatorio-card">
+          <h3>Atividade de Patrulhas</h3>
+          <div className="relatorio-content">
+            <p>Relatório de cobertura territorial</p>
+            <button className="gerar-btn">Gerar Relatório</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function Definicoes() {
-  // Restaurar tema do localStorage ou padrão
+function Perfil() {
+  const { user, signOut, hasRole } = useAuth();
+  const [notification, setNotification] = React.useState(null);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setNotification({ type: 'success', message: 'Logout realizado com sucesso!' });
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Erro ao sair do sistema' });
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="perfil-page">
+        <div className="auth-required">
+          <h2>Acesso Restrito</h2>
+          <p>É necessário autenticação para acessar esta área.</p>
+          <p>Utilize o sistema de login para acessar seu perfil.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="perfil-page">
+      {notification && notification.type === 'success' && (
+        <SuccessToast 
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      {notification && notification.type === 'error' && (
+        <ErrorToast 
+          error={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      
+      <div className="page-header">
+        <h1>Perfil do Usuário</h1>
+      </div>
+
+      <div className="perfil-content">
+        <div className="perfil-info">
+          <div className="perfil-foto">
+            <img 
+              src={user.photoURL || user.foto || 'https://via.placeholder.com/100'} 
+              alt="Foto de perfil" 
+            />
+            {hasRole('admin') && <span className="adm-badge">ADMIN</span>}
+            {hasRole('superintendent') && <span className="super-badge">SUPERINTENDENTE</span>}
+            {hasRole('inspector') && <span className="inspector-badge">INSPETOR</span>}
+          </div>
+          <div className="perfil-detalhes">
+            <h2>{user.displayName || user.nome}</h2>
+            <p className="perfil-cargo">{user.cargo || 'Não definido'}</p>
+            <p className="perfil-email">Email: {user.email}</p>
+            <p className="perfil-matricula">Matrícula: {user.matricula || 'N/A'}</p>
+            <p className="perfil-role">Função: {user.role || 'officer'}</p>
+          </div>
+        </div>
+
+        <div className="perfil-acoes">
+          <button className="secundario-btn">Alterar Senha</button>
+          <button className="secundario-btn">Editar Perfil</button>
+          <button className="logoff-btn" onClick={handleSignOut}>Sair do Sistema</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Configuracoes() {
   const [temaAtual, setTemaAtual] = React.useState(() => {
     const saved = localStorage.getItem('temaAtual');
-    return saved || 'vermelhoazul';
+    return saved || 'padrao';
   });
+
+  const temas = [
+    { nome: 'Padrão', id: 'padrao', vars: { '--cor-primaria': '#1a2236', '--cor-secundaria': '#2c3e50', '--cor-fundo': '#f8f9fa', '--cor-texto': '#2c3e50', '--cor-borda': '#dee2e6', '--cor-sombra': '0 2px 4px rgba(0,0,0,0.1)' } },
+    { nome: 'Escuro', id: 'escuro', vars: { '--cor-primaria': '#2c3e50', '--cor-secundaria': '#34495e', '--cor-fundo': '#1a1a1a', '--cor-texto': '#ecf0f1', '--cor-borda': '#34495e', '--cor-sombra': '0 2px 4px rgba(0,0,0,0.3)' } },
+    { nome: 'Azul Profissional', id: 'azul', vars: { '--cor-primaria': '#2980b9', '--cor-secundaria': '#3498db', '--cor-fundo': '#ecf0f1', '--cor-texto': '#2c3e50', '--cor-borda': '#bdc3c7', '--cor-sombra': '0 2px 4px rgba(41,128,185,0.1)' } },
+  ];
+
   React.useEffect(() => {
     const tema = temas.find(t => t.id === temaAtual) || temas[0];
-    aplicarTema(tema.vars);
+    Object.entries(tema.vars).forEach(([k, v]) => {
+      document.documentElement.style.setProperty(k, v);
+    });
     localStorage.setItem('temaAtual', temaAtual);
   }, [temaAtual]);
 
   return (
-    <div className="pagina">
-      <h2>Definições</h2>
-      <div style={{ margin: '24px 0' }}>
-        <label htmlFor="tema-select"><b>Tema do app:</b></label><br/>
-        <select id="tema-select" value={temaAtual} onChange={e => setTemaAtual(e.target.value)} style={{ marginTop: 8, padding: 6, fontSize: '1rem' }}>
-          {temas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-        </select>
+    <div className="configuracoes-page">
+      <div className="page-header">
+        <h1>Configurações do Sistema</h1>
       </div>
-      <p>Configurações do sistema.</p>
-    </div>
-  );
-}
 
-const denuncias = [
-  { id: 1, titulo: 'Roubo de Veículo', descricao: 'Roubo de carro na Av. Central', foto: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80', localizacao: 'Avenida Fernão de Magalhães, Coimbra', detalhes: 'O veículo foi levado por volta das 22h na Avenida Fernão de Magalhães. Testemunhas viram dois suspeitos.' },
-  { id: 2, titulo: 'Furto em Residência', descricao: 'Furto em casa no bairro Jardim', foto: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80', localizacao: 'Rua do Brasil, 45, Coimbra', detalhes: 'A residência estava vazia na Rua do Brasil. Foram levados eletrônicos e joias.' },
-  { id: 3, titulo: 'Vandalismo', descricao: 'Pichações em muro público', foto: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', localizacao: 'Praça da República, Coimbra', detalhes: 'Muro pichado durante a madrugada na Praça da República. Câmeras de segurança registraram a ação.' },
-  { id: 4, titulo: 'Assalto a Mão Armada', descricao: 'Assalto em farmácia', foto: 'https://images.unsplash.com/photo-1503676382389-4809596d5290?auto=format&fit=crop&w=400&q=80', localizacao: 'Rua Direita, Coimbra', detalhes: 'Dois indivíduos armados invadiram a farmácia e levaram dinheiro do caixa.' },
-  { id: 5, titulo: 'Furto de Bicicleta', descricao: 'Bicicleta furtada em estacionamento', foto: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80', localizacao: 'Estação de Comboios, Coimbra', detalhes: 'A bicicleta estava presa com cadeado, que foi cortado.' },
-  { id: 6, titulo: 'Arrombamento de Loja', descricao: 'Loja de eletrônicos arrombada', foto: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?auto=format&fit=crop&w=400&q=80', localizacao: 'Avenida Sá da Bandeira, Coimbra', detalhes: 'Vidraça quebrada e vários produtos levados.' },
-  { id: 7, titulo: 'Furto em Veículo', descricao: 'Objetos furtados de dentro de carro', foto: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80', localizacao: 'Parque Verde do Mondego, Coimbra', detalhes: 'Vidro do carro foi quebrado e bolsa furtada.' },
-  { id: 8, titulo: 'Roubo de Telemóvel', descricao: 'Roubo de telemóvel na rua', foto: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80', localizacao: 'Largo da Portagem, Coimbra', detalhes: 'Vítima foi abordada por um suspeito e teve o telemóvel levado.' },
-  { id: 9, titulo: 'Dano em Patrimônio Público', descricao: 'Banco de jardim destruído', foto: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', localizacao: 'Jardim da Sereia, Coimbra', detalhes: 'Banco de madeira foi destruído durante a noite.' },
-  { id: 10, titulo: 'Furto em Estabelecimento', descricao: 'Furto em padaria', foto: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80', localizacao: 'Rua da Sofia, Coimbra', detalhes: 'Dinheiro e produtos alimentícios foram levados.' },
-  { id: 11, titulo: 'Porte de Drogas', descricao: 'Suspeito detido com drogas', foto: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?auto=format&fit=crop&w=400&q=80', localizacao: 'Praça 8 de Maio, Coimbra', detalhes: 'Durante abordagem policial, foram encontradas substâncias ilícitas.' },
-];
-
-function Principal({ usuario, onLoginClick }) {
-  return (
-    <div className="pagina principal-home">
-      <div className="principal-header">
-        <img src="/logo_pap_MR.png" alt="Logo Policia Alerta" className="principal-logo" />
-        <h2>Bem-vindo{usuario ? `, ${usuario.nome}` : ''} ao <span style={{color:'var(--cor-primaria)'}}>Painel Policial</span></h2>
-        <p style={{fontSize:'1.1rem', color:'#555', marginTop:8}}>
-          {usuario ? 'Acesse rapidamente as principais funções do sistema.' : 'Faça login para acessar todas as funcionalidades.'}
-        </p>
-        {!usuario && <button className="login-btn" onClick={onLoginClick}>Login / Criar Conta</button>}
-      </div>
-      <div className="principal-atalhos">
-        <Atalho to="/denuncias" label="Denúncias" icon="🚨" />
-        <Atalho to="/historico" label="Histórico" icon="📋" />
-        <Atalho to="/perfil" label="Perfil" icon="👮‍♂️" />
-        <Atalho to="/definicoes" label="Definições" icon="⚙️" />
-      </div>
-    </div>
-  );
-}
-
-function Atalho({ to, label, icon }) {
-  const navigate = useNavigate();
-  return (
-    <div className="atalho-card" onClick={() => navigate(to)} tabIndex={0} role="button">
-      <span className="atalho-icon">{icon}</span>
-      <span className="atalho-label">{label}</span>
-    </div>
-  );
-}
-
-// Contas ADM pré-cadastradas
-const ADM_USERS = [
-  { nome: 'Micael Martins', profissao: 'Administrador', foto: 'https://randomuser.me/api/portraits/men/32.jpg', senha: '123sigma', adm: true },
-  { nome: 'Rodrigo Pinheiro', profissao: 'Administrador', foto: 'https://randomuser.me/api/portraits/men/33.jpg', senha: '123sigma', adm: true },
-];
-
-function App() {
-  // Restaurar do localStorage ou usar valor padrão
-  const [usuario, setUsuario] = React.useState(() => {
-    const saved = localStorage.getItem('usuario');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [denunciasAtivas, setDenunciasAtivas] = React.useState(() => {
-    const saved = localStorage.getItem('denunciasAtivas');
-    return saved ? JSON.parse(saved) : denuncias;
-  });
-  const [historico, setHistorico] = React.useState(() => {
-    const saved = localStorage.getItem('historico');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [showLogin, setShowLogin] = React.useState(false);
-
-  // Salvar no localStorage sempre que mudar
-  React.useEffect(() => {
-    localStorage.setItem('usuario', JSON.stringify(usuario));
-  }, [usuario]);
-  React.useEffect(() => {
-    localStorage.setItem('denunciasAtivas', JSON.stringify(denunciasAtivas));
-  }, [denunciasAtivas]);
-  React.useEffect(() => {
-    localStorage.setItem('historico', JSON.stringify(historico));
-  }, [historico]);
-
-  function aceitarDenuncia(id) {
-    const denuncia = denunciasAtivas.find(d => d.id === id);
-    if (!denuncia) return;
-    setDenunciasAtivas(denunciasAtivas.filter(d => d.id !== id));
-    setHistorico([
-      { ...denuncia, aceiteEm: Date.now() },
-      ...historico
-    ]);
-  }
-
-  function handleLogin(user) {
-    // Se for ADM
-    const adm = ADM_USERS.find(u => u.nome === user.nome && user.senha === u.senha);
-    if (adm) {
-      setUsuario({ nome: adm.nome, profissao: adm.profissao, foto: adm.foto, adm: true });
-      setShowLogin(false);
-      return;
-    }
-    // Usuário comum
-    setUsuario({ nome: user.nome, profissao: user.profissao, foto: user.foto, adm: false });
-    setShowLogin(false);
-  }
-  function handleLogoff() {
-    setUsuario(null);
-  }
-
-  return (
-    <Router>
-      <div className="container">
-        <MenuLateral />
-        <div className="conteudo">
-          {showLogin && <LoginModal onClose={() => setShowLogin(false)} onLogin={handleLogin} />}
-          <Routes>
-            <Route path="/" element={<Principal usuario={usuario} onLoginClick={() => setShowLogin(true)} />} />
-            <Route path="/perfil" element={<Perfil usuario={usuario} onLogoff={handleLogoff} onLoginClick={() => setShowLogin(true)} />} />
-            <Route path="/denuncias" element={<Denuncias denuncias={denunciasAtivas} onAceitar={aceitarDenuncia} />} />
-            <Route path="/denuncias/:id" element={<DenunciaDetalhe denuncias={denunciasAtivas} onAceitar={aceitarDenuncia} />} />
-            <Route path="/historico" element={<Historico historico={historico} />} />
-            <Route path="/definicoes" element={<Definicoes />} />
-          </Routes>
+      <div className="configuracoes-content">
+        <div className="config-section">
+          <h3>Aparência</h3>
+          <div className="config-item">
+            <label htmlFor="tema-select">Tema do Sistema:</label>
+            <select 
+              id="tema-select" 
+              value={temaAtual} 
+              onChange={e => setTemaAtual(e.target.value)}
+              className="config-select"
+            >
+              {temas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </div>
         </div>
-      </div>
-    </Router>
-  );
-}
 
-function Perfil({ usuario, onLogoff, onLoginClick }) {
-  const [foto, setFoto] = React.useState(usuario?.foto || 'https://randomuser.me/api/portraits/men/75.jpg');
-  React.useEffect(() => { if (usuario?.foto) setFoto(usuario.foto); }, [usuario]);
-  if (!usuario) {
-    return (
-      <div className="pagina perfil-policia">
-        <h2>Perfil do Usuário</h2>
-        <p>Você precisa estar logado para ver o perfil.</p>
-        <button className="login-btn" onClick={onLoginClick}>Login / Criar Conta</button>
-      </div>
-    );
-  }
-  function handleFotoChange(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setFoto(ev.target.result);
-      reader.readAsDataURL(file);
-    }
-  }
-  return (
-    <div className="pagina perfil-policia">
-      <div className="perfil-header">
-        <div className="perfil-foto-wrapper">
-          <img src={foto} alt="Foto de perfil" className="perfil-foto" />
-          <label className="mudar-foto-btn">
-            Mudar foto
-            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoChange} />
-          </label>
-        </div>
-        <div className="perfil-info">
-          <h2>{usuario.nome} {usuario.adm && <span style={{color:'#e74c3c',fontSize:'1rem',marginLeft:8}}>(ADM)</span>}</h2>
-          <p className="perfil-profissao">{usuario.profissao}</p>
-        </div>
-      </div>
-      <button className="logoff-btn" onClick={onLogoff}>Logoff</button>
-    </div>
-  );
-}
-
-function LoginModal({ onClose, onLogin }) {
-  const [isLogin, setIsLogin] = React.useState(true);
-  const [nome, setNome] = React.useState('');
-  const [profissao, setProfissao] = React.useState('');
-  const [foto, setFoto] = React.useState('https://randomuser.me/api/portraits/men/75.jpg');
-  const [senha, setSenha] = React.useState('');
-  function handleFotoChange(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setFoto(ev.target.result);
-      reader.readAsDataURL(file);
-    }
-  }
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (isLogin) {
-      onLogin({ nome, profissao, foto, senha });
-    } else {
-      onLogin({ nome, profissao, foto, senha });
-    }
-  }
-  return (
-    <div className="login-modal-bg">
-      <div className="login-modal">
-        <button className="login-fechar" onClick={onClose}>×</button>
-        <h2>{isLogin ? 'Login' : 'Criar Conta'}</h2>
-        <form onSubmit={handleSubmit}>
-          <label>Nome:<input value={nome} onChange={e => setNome(e.target.value)} required /></label>
-          <label>Profissão:<input value={profissao} onChange={e => setProfissao(e.target.value)} required={!isLogin} /></label>
-          <label>Senha:<input type="password" value={senha} onChange={e => setSenha(e.target.value)} required /></label>
-          <div style={{margin:'12px 0'}}>
-            <img src={foto} alt="Foto de perfil" className="perfil-foto" style={{width:60, height:60}} />
-            <label className="mudar-foto-btn" style={{marginLeft:8}}>
-              Foto
-              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoChange} />
+        <div className="config-section">
+          <h3>Notificações</h3>
+          <div className="config-item">
+            <label>
+              <input type="checkbox" defaultChecked /> Receber notificações de ocorrências
             </label>
           </div>
-          <button className="login-btn" type="submit">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
+          <div className="config-item">
+            <label>
+              <input type="checkbox" defaultChecked /> Alertas de alta prioridade
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const { user } = useAuth();
+
+  // Debug - verificar se user existe
+  console.log('🔍 Debug - User state:', user);
+
+  // OBRIGATÓRIO: Mostrar login se não houver usuário autenticado
+  if (!user || user === null || user === undefined) {
+    console.log('🔐 Showing login - no user authenticated');
+    return (
+      <ErrorBoundary>
+        <div className="app-container" style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        }}>
+          <LoginModal onClose={() => {}} />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  console.log('✅ User authenticated, showing main interface');
+
+  // Só mostrar interface principal se usuário estiver logado
+  return (
+    <ErrorBoundary>
+      <Router>
+        <div className="app-container">
+          <MenuLateral />
+          <div className="main-content">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/ocorrencias" element={<Ocorrencias />} />
+              <Route path="/ocorrencias/:id" element={<OcorrenciaDetalhe />} />
+              <Route path="/patrulhas" element={<Patrulhas />} />
+              <Route path="/relatorios" element={<Relatorios />} />
+              <Route path="/perfil" element={<Perfil />} />
+              <Route path="/usuarios" element={<UserManagement />} />
+              <Route path="/configuracoes" element={<Configuracoes />} />
+            </Routes>
+          </div>
+        </div>
+      </Router>
+    </ErrorBoundary>
+  );
+}
+
+function LoginModal({ onClose }) {
+  const { signIn, signUp } = useAuth();
+  const [isLogin, setIsLogin] = React.useState(true);
+  const [nomeCompleto, setNomeCompleto] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [dataNascimento, setDataNascimento] = React.useState('');
+  const [paisResidencia, setPaisResidencia] = React.useState('Portugal');
+  const [numeroCC, setNumeroCC] = React.useState('');
+  const [cargo, setCargo] = React.useState('');
+  const [matricula, setMatricula] = React.useState('');
+  const [foto, setFoto] = React.useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [recaptchaToken, setRecaptchaToken] = React.useState(null);
+  const [recaptchaExpired, setRecaptchaExpired] = React.useState(false);
+
+  const handleFotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('A foto deve ter menos de 5MB');
+        return;
+      }
+      
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        setError('Por favor selecione apenas arquivos de imagem');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (ev) => setFoto(ev.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // reCAPTCHA Enterprise handlers
+  const executeRecaptcha = async () => {
+    try {
+      if (window.grecaptcha && window.grecaptcha.enterprise) {
+        // Executar reCAPTCHA no cliente
+        const token = await window.grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, { action: 'LOGIN' });
+        
+        // Verificar o token no servidor
+        const functions = getFunctions();
+        const verifyRecaptcha = httpsCallable(functions, 'verifyRecaptcha');
+        
+        const result = await verifyRecaptcha({ token, action: 'LOGIN' });
+        
+        if (result.data.success) {
+          setRecaptchaToken(token);
+          setRecaptchaExpired(false);
+          setError(null);
+          console.log('reCAPTCHA verificado com sucesso, score:', result.data.score);
+          return token;
+        } else {
+          setError('Falha na verificação do reCAPTCHA no servidor');
+          return null;
+        }
+      } else {
+        setError('reCAPTCHA não está carregado. Recarregue a página.');
+        return null;
+      }
+    } catch (error) {
+      console.error('Erro no reCAPTCHA:', error);
+      setError('Erro na verificação reCAPTCHA. Por favor, tente novamente.');
+      return null;
+    }
+  };
+
+  const handleRecaptchaChange = () => {
+    executeRecaptcha();
+  };
+
+  const handleRecaptchaExpired = () => {
+    setRecaptchaToken(null);
+    setRecaptchaExpired(true);
+    setError('Verificação reCAPTCHA expirou. Por favor, verifique novamente.');
+  };
+
+  const handleRecaptchaError = () => {
+    setRecaptchaToken(null);
+    setError('Erro na verificação reCAPTCHA. Por favor, tente novamente.');
+  };
+
+  // Reset reCAPTCHA when switching between login/register
+  const handleToggleAuth = () => {
+    setIsLogin(!isLogin);
+    setRecaptchaToken(null);
+    setRecaptchaExpired(false);
+    setError(null);
+  };
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        // Para login, usar apenas email e password
+        console.log('🔐 Tentativa de login com:', { email, password: password ? '***' : 'vazio' });
+        
+        if (!email || !password) {
+          setError('Por favor, preencha o email e a palavra-passe');
+          setLoading(false);
+          return;
+        }
+        
+        if (!email.includes('@')) {
+          setError('Por favor, insira um email válido');
+          setLoading(false);
+          return;
+        }
+        
+        if (password.length < 6) {
+          setError('A palavra-passe deve ter pelo menos 6 caracteres');
+          setLoading(false);
+          return;
+        }
+
+        // Verificar reCAPTCHA para login
+        if (!recaptchaToken) {
+          setError('Por favor, complete a verificação reCAPTCHA para confirmar que não é um robô');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('✅ Validação passou, tentando login...');
+        await signIn(email, password);
+        console.log('✅ Login realizado com sucesso');
+      } else {
+        // Para registro, validar todos os campos obrigatórios
+        console.log('📝 Tentativa de registro com:', { 
+          nomeCompleto, 
+          email, 
+          cargo, 
+          matricula,
+          password: password ? '***' : 'vazio'
+        });
+        
+        if (!nomeCompleto || !password || !email || !dataNascimento || !paisResidencia || !numeroCC || !cargo || !matricula) {
+          setError('Por favor, preencha todos os campos obrigatórios');
+          setLoading(false);
+          return;
+        }
+        
+        if (!email.includes('@')) {
+          setError('Por favor, insira um email válido');
+          setLoading(false);
+          return;
+        }
+        
+        if (password.length < 6) {
+          setError('A palavra-passe deve ter pelo menos 6 caracteres');
+          setLoading(false);
+          return;
+        }
+
+        // Verificar reCAPTCHA para registro
+        if (!recaptchaToken) {
+          setError('Por favor, complete a verificação reCAPTCHA para confirmar que não é um robô');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('✅ Validação passou, tentando registro...');
+        await signUp({ 
+          nome: nomeCompleto, 
+          password, 
+          email, 
+          dataNascimento, 
+          paisResidencia, 
+          numeroCC,
+          cargo,
+          matricula,
+          foto: foto
+        });
+        console.log('✅ Registro realizado com sucesso');
+      }
+      onClose();
+    } catch (error) {
+      console.error('❌ Erro no processo:', error);
+      setError(error.message || 'Erro desconhecido durante o processo');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="login-modal">
+        <div className="modal-header">
+          <h2>{isLogin ? '🚨 Polícia Alerta - Login' : '📝 Registro de Policial'}</h2>
+          <p>{isLogin ? 'Acesso com Email e Palavra-passe' : 'Cadastro de Novo Agente'}</p>
+        </div>
+        
+        {error && (
+          <div className="login-error">
+            <p>❌ {error}</p>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="login-form">
+          {!isLogin && (
+            <div className="form-group">
+              <label>Nome Completo: <span className="required">*</span></label>
+              <input 
+                type="text" 
+                value={nomeCompleto} 
+                onChange={e => setNomeCompleto(e.target.value)} 
+                required 
+                className="form-input"
+                placeholder="Nome completo do policial"
+                disabled={loading}
+              />
+            </div>
+          )}
+          
+          <div className="form-group">
+            <label>Email: <span className="required">*</span></label>
+            <input 
+              type="email" 
+              value={email} 
+              onChange={e => setEmail(e.target.value)} 
+              required 
+              className="form-input"
+              placeholder="exemplo@psp.pt"
+              disabled={loading}
+            />
+          </div>
+          
+          <div className="form-group">
+            <label>Palavra-passe: <span className="required">*</span></label>
+            <input 
+              type="password" 
+              value={password} 
+              onChange={e => setPassword(e.target.value)} 
+              required 
+              className="form-input"
+              placeholder="Digite sua palavra-passe"
+              minLength="6"
+              disabled={loading}
+            />
+            {isLogin && (
+              <small className="form-help">Mínimo 6 caracteres</small>
+            )}
+          </div>
+
+          {/* reCAPTCHA Enterprise */}
+          <div className="form-group recaptcha-container">
+            <button
+              type="button"
+              onClick={handleRecaptchaChange}
+              className="recaptcha-btn"
+              disabled={loading || recaptchaToken}
+            >
+              {recaptchaToken ? '✅ Verificação concluída' : '🤖 Verificar reCAPTCHA'}
+            </button>
+            {recaptchaExpired && (
+              <small className="form-help error">⚠️ Verificação expirou. Complete novamente.</small>
+            )}
+            {!recaptchaToken && (
+              <small className="form-help">Clique para verificar que não é um robô</small>
+            )}
+          </div>
+          
+          {!isLogin && (
+            <>
+              <div className="form-group">
+                <label>Data de Nascimento:</label>
+                <input 
+                  type="date" 
+                  value={dataNascimento} 
+                  onChange={e => setDataNascimento(e.target.value)} 
+                  required 
+                  className="form-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>País de Residência:</label>
+                <select 
+                  value={paisResidencia} 
+                  onChange={e => setPaisResidencia(e.target.value)} 
+                  required
+                  className="form-input"
+                >
+                  <option value="Portugal">🇵🇹 Portugal</option>
+                  <option value="Brasil">🇧🇷 Brasil</option>
+                  <option value="España">🇪🇸 Espanha</option>
+                  <option value="França">🇫🇷 França</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>Nº Cartão de Cidadão:</label>
+                <input 
+                  type="text" 
+                  value={numeroCC} 
+                  onChange={e => setNumeroCC(e.target.value)} 
+                  required 
+                  className="form-input"
+                  placeholder="12345678 9 ZZ0"
+                  pattern="[0-9]{8} [0-9] [A-Z]{2}[0-9]"
+                  title="Formato: 12345678 9 ZZ0"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Cargo:</label>
+                <input 
+                  type="text" 
+                  value={cargo} 
+                  onChange={e => setCargo(e.target.value)} 
+                  required 
+                  className="form-input"
+                  placeholder="Ex: Policial, Inspetor, Superintendente"
+                />
+              </div>
+              
+                            <div className="form-group">
+                <label>Matrícula:</label>
+                <input 
+                  type="text" 
+                  value={matricula} 
+                  onChange={e => setMatricula(e.target.value)} 
+                  required 
+                  className="form-input"
+                  placeholder="Número da matrícula"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Foto de Perfil:</label>
+                <div className="foto-upload">
+                  <img src={foto} alt="Foto de perfil" className="foto-preview" />
+                  <label className="upload-btn">
+                    Selecionar Foto
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoChange} />
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+          
+          <button type="submit" className="login-submit" disabled={loading}>
+            {loading ? '⏳ A processar...' : (isLogin ? '🔓 Entrar no Sistema' : '✅ Registar Policial')}
+          </button>
         </form>
-        <button className="login-trocar" onClick={() => setIsLogin(!isLogin)}>
-          {isLogin ? 'Não tem conta? Criar conta' : 'Já tem conta? Login'}
+        
+        <button className="toggle-auth" onClick={handleToggleAuth} disabled={loading}>
+          {isLogin ? '📝 Registar novo policial' : '🔓 Já tem conta? Fazer login com email'}
         </button>
+        
+        {isLogin && (
+          <div className="login-help">
+            <p><strong>💡 Dica:</strong> Use o mesmo email e palavra-passe que usou no registro.</p>
+            <p><strong>🔐 Primeira vez?</strong> Clique em "Registar novo policial" para criar sua conta.</p>
+            <p><strong>🤖 Segurança:</strong> Complete a verificação reCAPTCHA para confirmar que é humano.</p>
+          </div>
+        )}
       </div>
     </div>
   );

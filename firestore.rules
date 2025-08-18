@@ -1,18 +1,98 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && getUserRole() == role;
+    }
+    
+    function hasAnyRole(roles) {
+      return isAuthenticated() && getUserRole() in roles;
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    function isSuperintendent() {
+      return hasRole('superintendent');
+    }
+    
+    function isAuthorizedOfficer() {
+      return hasAnyRole(['admin', 'superintendent', 'inspector', 'officer', 'dispatcher']);
+    }
+
+    // Users collection - only authenticated users can read their own profile
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        hasAnyRole(['admin', 'superintendent'])
+      );
+      allow write: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        hasAnyRole(['admin', 'superintendent'])
+      );
+      allow create: if isAuthenticated();
+    }
+
+    // Ocorrências (Incidents) - Police officers and above can access
+    match /ocorrencias/{incidentId} {
+      allow read: if isAuthorizedOfficer();
+      allow create: if isAuthorizedOfficer() && 
+        request.auth != null &&
+        // Ensure required fields are present
+        'tipo' in resource.data &&
+        'descricao' in resource.data &&
+        'localizacao' in resource.data &&
+        'prioridade' in resource.data &&
+        'status' in resource.data;
+      allow update: if isAuthorizedOfficer() &&
+        // Don't allow changing creation timestamp
+        resource.data.registradaEm == request.resource.data.registradaEm;
+      allow delete: if hasAnyRole(['admin', 'superintendent']);
+    }
+
+    // Patrulhas (Patrols) - Police officers and above can read, only supervisors can modify
+    match /patrulhas/{patrolId} {
+      allow read: if isAuthorizedOfficer();
+      allow create: if hasAnyRole(['admin', 'superintendent', 'inspector']);
+      allow update: if hasAnyRole(['admin', 'superintendent', 'inspector', 'dispatcher']);
+      allow delete: if hasAnyRole(['admin', 'superintendent']);
+    }
+
+    // System logs - Only admins can read, system can write
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated(); // Allow system to create logs
+      allow update, delete: if false; // Logs are immutable
+    }
+
+    // System configuration - Only admins can access
+    match /system/{configId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Reports - Officers can read their own reports, supervisors can read all
+    match /relatorios/{reportId} {
+      allow read: if isAuthorizedOfficer();
+      allow create: if isAuthorizedOfficer();
+      allow update: if hasAnyRole(['admin', 'superintendent', 'inspector']) ||
+        (isAuthenticated() && resource.data.criadoPor == request.auth.uid);
+      allow delete: if hasAnyRole(['admin', 'superintendent']);
+    }
+
+    // Deny all other documents
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2025, 8, 21);
+      allow read, write: if false;
     }
   }
 }
