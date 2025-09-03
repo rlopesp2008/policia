@@ -15,9 +15,6 @@ REACT_APP_FIREBASE_MEASUREMENT_ID=G-M0D4MQB2SV
 REACT_APP_ENVIRONMENT=production
 REACT_APP_APP_NAME=PoliciaAlerta
 
-# reCAPTCHA Enterprise Configuration
-REACT_APP_RECAPTCHA_SITE_KEY=6LceEKkrAAAAACp1jvVZg0Cr0Gi0rPf4utogANw6
-
 # INSTRUÇÕES:
 # 1. Crie um arquivo chamado .env na pasta policia
 # 2. Cole todo este conteúdo no arquivo .env

@@ -1026,36 +1026,6 @@ body {
   color: var(--cor-primaria);
 }
 
-/* reCAPTCHA Enterprise Styles */
-.recaptcha-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 1rem 0;
-}
-
-.recaptcha-btn {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 500;
-  transition: background-color 0.3s;
-  min-width: 200px;
-}
-
-.recaptcha-btn:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-.recaptcha-btn:disabled {
-  background-color: #28a745;
-  cursor: not-allowed;
-}
-
 .form-help.error {
   color: #dc3545;
   font-weight: 500;

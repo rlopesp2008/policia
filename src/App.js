@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Link, NavLink } from 'react-rou
 import './App.css';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { RECAPTCHA_SITE_KEY } from './firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // Components
@@ -788,8 +787,6 @@ function LoginModal({ onClose }) {
   const [foto, setFoto] = React.useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
-  const [recaptchaToken, setRecaptchaToken] = React.useState(null);
-  const [recaptchaExpired, setRecaptchaExpired] = React.useState(false);
 
   const handleFotoChange = (e) => {
     const file = e.target.files[0];
@@ -812,60 +809,8 @@ function LoginModal({ onClose }) {
     }
   };
 
-  // reCAPTCHA Enterprise handlers
-  const executeRecaptcha = async () => {
-    try {
-      if (window.grecaptcha && window.grecaptcha.enterprise) {
-        // Executar reCAPTCHA no cliente
-        const token = await window.grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, { action: 'LOGIN' });
-        
-        // Verificar o token no servidor
-        const functions = getFunctions();
-        const verifyRecaptcha = httpsCallable(functions, 'verifyRecaptcha');
-        
-        const result = await verifyRecaptcha({ token, action: 'LOGIN' });
-        
-        if (result.data.success) {
-          setRecaptchaToken(token);
-          setRecaptchaExpired(false);
-          setError(null);
-          console.log('reCAPTCHA verificado com sucesso, score:', result.data.score);
-          return token;
-        } else {
-          setError('Falha na verificação do reCAPTCHA no servidor');
-          return null;
-        }
-      } else {
-        setError('reCAPTCHA não está carregado. Recarregue a página.');
-        return null;
-      }
-    } catch (error) {
-      console.error('Erro no reCAPTCHA:', error);
-      setError('Erro na verificação reCAPTCHA. Por favor, tente novamente.');
-      return null;
-    }
-  };
-
-  const handleRecaptchaChange = () => {
-    executeRecaptcha();
-  };
-
-  const handleRecaptchaExpired = () => {
-    setRecaptchaToken(null);
-    setRecaptchaExpired(true);
-    setError('Verificação reCAPTCHA expirou. Por favor, verifique novamente.');
-  };
-
-  const handleRecaptchaError = () => {
-    setRecaptchaToken(null);
-    setError('Erro na verificação reCAPTCHA. Por favor, tente novamente.');
-  };
-
-  // Reset reCAPTCHA when switching between login/register
   const handleToggleAuth = () => {
     setIsLogin(!isLogin);
-    setRecaptchaToken(null);
-    setRecaptchaExpired(false);
     setError(null);
   };
 
@@ -893,13 +838,6 @@ function LoginModal({ onClose }) {
         
         if (password.length < 6) {
           setError('A palavra-passe deve ter pelo menos 6 caracteres');
-          setLoading(false);
-          return;
-        }
-
-        // Verificar reCAPTCHA para login
-        if (!recaptchaToken) {
-          setError('Por favor, complete a verificação reCAPTCHA para confirmar que não é um robô');
           setLoading(false);
           return;
         }
@@ -931,13 +869,6 @@ function LoginModal({ onClose }) {
         
         if (password.length < 6) {
           setError('A palavra-passe deve ter pelo menos 6 caracteres');
-          setLoading(false);
-          return;
-        }
-
-        // Verificar reCAPTCHA para registro
-        if (!recaptchaToken) {
-          setError('Por favor, complete a verificação reCAPTCHA para confirmar que não é um robô');
           setLoading(false);
           return;
         }
@@ -1022,24 +953,6 @@ function LoginModal({ onClose }) {
             />
             {isLogin && (
               <small className="form-help">Mínimo 6 caracteres</small>
-            )}
-          </div>
-
-          {/* reCAPTCHA Enterprise */}
-          <div className="form-group recaptcha-container">
-            <button
-              type="button"
-              onClick={handleRecaptchaChange}
-              className="recaptcha-btn"
-              disabled={loading || recaptchaToken}
-            >
-              {recaptchaToken ? '✅ Verificação concluída' : '🤖 Verificar reCAPTCHA'}
-            </button>
-            {recaptchaExpired && (
-              <small className="form-help error">⚠️ Verificação expirou. Complete novamente.</small>
-            )}
-            {!recaptchaToken && (
-              <small className="form-help">Clique para verificar que não é um robô</small>
             )}
           </div>
           
@@ -1135,7 +1048,6 @@ function LoginModal({ onClose }) {
           <div className="login-help">
             <p><strong>💡 Dica:</strong> Use o mesmo email e palavra-passe que usou no registro.</p>
             <p><strong>🔐 Primeira vez?</strong> Clique em "Registar novo policial" para criar sua conta.</p>
-            <p><strong>🤖 Segurança:</strong> Complete a verificação reCAPTCHA para confirmar que é humano.</p>
           </div>
         )}
       </div>

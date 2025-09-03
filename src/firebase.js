@@ -17,9 +17,6 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || 'G-M0D4MQB2SV'
 };
 
-// reCAPTCHA Enterprise configuration
-export const RECAPTCHA_SITE_KEY = process.env.REACT_APP_RECAPTCHA_SITE_KEY || '6LceEKkrAAAAACp1jvVZg0Cr0Gi0rPf4utogANw6';
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
@@ -51,4 +48,4 @@ if (process.env.NODE_ENV === 'development') {
   // connectStorageEmulator(storage, 'localhost', 9199);
 }
 
-export { app, db, auth, functions, storage }; 
+export { app, db, auth, functions, storage };
